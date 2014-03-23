@@ -36,7 +36,7 @@ $ ./sez
 Warn: eth0:1 mac address 10:20:30:01:02:03
 Warn: tuners will only send video if you "sudo ifconfig eth0:1 hw ether 00:21:33:01:02:03"
 ```
-The sezmi TUN-01 will only talk to you if your [mac address(http://en.wikipedia.org/wiki/MAC_address)] startrs with 00:21:33:xx:xx:xx so copy/paste the command: (Note that it may confuse any open connections so close any open ssh sessions, for example.)
+The sezmi TUN-01 will only talk to you if your [mac address](http://en.wikipedia.org/wiki/MAC_address) startrs with 00:21:33:xx:xx:xx so copy/paste the command: (Note that it may confuse any open connections so close any open ssh sessions, for example.)
 ```
 $ sudo ifconfig eth0:1 hw ether 00:21:33:01:02:03
 ```
