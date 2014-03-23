@@ -25,7 +25,7 @@ $ ./sez
 Error: no interfaces have 169.254.0.0/16
 $
 ```
-You need to add an address in the range 169.254.0.0/16 (AutoIP). First run sudo ifconfig to check your network interface name. If it is "eth0" then add ":1" to it, like so:
+You need to add an address in the range [169.254.0.0/16 (AutoIP)](http://en.wikipedia.org/wiki/Link-local_address#IPv4). That link mentions [RFC 3927](http://tools.ietf.org/html/rfc3927) which says you should not do something like this, but for casual use it's fine. First run sudo ifconfig to check your network interface name. If it is "eth0" then add ":1" to it, like so:
 ```
 $ sudo ifconfig eth0:1 up 169.254.5.1 netmask 255.255.0.0
 SIOCSIFFLAGS: Cannot assign requested address
