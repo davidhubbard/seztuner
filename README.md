@@ -25,12 +25,25 @@ $ ./sez
 Error: no interfaces have 169.254.0.0/16
 $
 ```
-You need to add an address in the range [169.254.0.0/16 (AutoIP)](http://en.wikipedia.org/wiki/Link-local_address#IPv4). That link mentions [RFC 3927](http://tools.ietf.org/html/rfc3927) which says you should not do something like this, but for casual use it's fine. First run sudo ifconfig to check your network interface name. If it is "eth0" then add ":1" to it, like so:
+You need to add an address in the range [169.254.0.0/16 (AutoIP)](http://en.wikipedia.org/wiki/Link-local_address#IPv4). That link mentions [RFC 3927](http://tools.ietf.org/html/rfc3927) which says you should not do something like this, because it will delete your default gateway. First get your default gateway:
+```
+$ route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         192.168.3.1     0.0.0.0         UG    0      0        0 eth0
+127.0.0.0       127.0.0.1       255.0.0.0       UG    0      0        0 lo
+192.168.3.0     0.0.0.0         255.255.255.0   U     0      0        0 eth0
+```
+Your default gateway is the line that starts with 0.0.0.0 (so in my case it is 192.168.3.1). Also check the "Iface" column: if it is "eth0" then add ":1" to it to set up an AutoIP address like so:
 ```
 $ sudo ifconfig eth0:1 up 169.254.5.1 netmask 255.255.0.0
 SIOCSIFFLAGS: Cannot assign requested address
 ```
-The SIOCSIFFLAGS error is meaningless, so ignore it. Run sez again:
+The SIOCSIFFLAGS error is meaningless, so ignore it. But now your defaut gateway has been deleted, so add it back:
+```
+$ sudo route add default gw 192.168.3.1
+```
+Run sez again:
 ```
 $ ./sez
 Warn: eth0:1 mac address 10:20:30:01:02:03
