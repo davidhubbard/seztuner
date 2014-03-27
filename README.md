@@ -51,7 +51,9 @@ Warn: tuners will only send video if you "sudo ifconfig eth0:1 hw ether 00:21:33
 ```
 The sezmi TUN-01 will only talk to you if your [mac address](http://en.wikipedia.org/wiki/MAC_address) startrs with 00:21:33:xx:xx:xx so copy/paste the command: (Note that it may confuse any open connections so close any open ssh sessions, for example.)
 ```
-$ sudo ifconfig eth0:1 hw ether 00:21:33:01:02:03
+$ sudo ifconfig eth0 down
+$ sudo ifconfig eth0 hw ether 00:21:33:01:02:03
+$ sudo ifconfig eth0 up
 ```
 Now run sez again:
 ```
