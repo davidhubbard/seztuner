@@ -15,7 +15,6 @@ this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <arpa/inet.h>
-//#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -25,6 +24,46 @@ this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef _SIZEOF_ADDR_IFREQ
 #define _SIZEOF_ADDR_IFREQ(x) sizeof(x)
 #endif
+
+#define USE_GETIFADDRS
+
+#ifdef USE_GETIFADDRS
+#include <sys/types.h>
+#include <ifaddrs.h>
+
+static int foreach_if_af_inet(struct ifaddrs * ifa, foreach_if_cb cb, void * ctx)
+{
+	for (; ifa; ifa = ifa->ifa_next) {
+		if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
+
+		u32 ip_addr = ((struct sockaddr_in *) ifa->ifa_addr)->sin_addr.s_addr;
+		if (!ip_addr) {
+			fprintf(stderr, " [%s no IP]", ifa->ifa_name);
+			continue;
+		}
+
+		u32 netmask = ((struct sockaddr_in *) ifa->ifa_netmask)->sin_addr.s_addr;
+		if (cb(ifa->ifa_name, ip_addr, netmask, ctx)) return 1;
+	}
+	return 0;
+}
+
+int foreach_if(int sock_to_kernel, foreach_if_cb cb, void * ctx)
+{
+	(void) sock_to_kernel;
+
+	struct ifaddrs * p;
+	if (getifaddrs(&p)) {
+		fprintf(stderr, "foreach_if: getifaddrs() failed: %d %s\n", errno, strerror(errno));
+		return 1;
+	}
+
+	int r = foreach_if_af_inet(p, cb, ctx);
+	freeifaddrs(p);
+	return r;
+}
+
+#else /* USE_GETIFADDRS */
 
 int foreach_if(int sock_to_kernel, foreach_if_cb cb, void * ctx)
 {
@@ -97,7 +136,7 @@ int foreach_if(int sock_to_kernel, foreach_if_cb cb, void * ctx)
 		}
 		u32 netmask = ((struct sockaddr_in *) &(ifr->ifr_addr))->sin_addr.s_addr;
 
-		if (cb(ifr, ip_addr, netmask, ctx)) {
+		if (cb(ifr->ifr_name, ip_addr, netmask, ctx)) {
 			free(ifc.ifc_buf);
 			return 1;
 		}
@@ -106,6 +145,7 @@ int foreach_if(int sock_to_kernel, foreach_if_cb cb, void * ctx)
 	free(ifc.ifc_buf);
 	return 0;
 }
+#endif /* USE_GETIFADDRS */
 
 void __ip_printf(char * s, size_t len, u32 ip, const char * funcname, unsigned long line)
 {

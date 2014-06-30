@@ -175,13 +175,13 @@ struct tunerfind2_ctx {
 };
 #define hdhomerun_port (65001)
 
-static int tunerfind2(struct ifreq * ifr, u32 ip_addr, u32 netmask, void * ctx)
+static int tunerfind2(const char * if_name, u32 ip_addr, u32 netmask, void * ctx)
 {
 	tunerfind2_ctx * list = (typeof(list)) ctx;
 
 	// only send on interfaces with link-local IPv4 address (169.254.0.0/16)
 	if ((ntohl(ip_addr) & 0xffff0000) != 0xa9fe0000 || ntohl(netmask) != 0xffff0000) {
-		if (list->debug) fprintf(stderr, " %s:not 169.254", ifr->ifr_name);
+		if (list->debug) fprintf(stderr, " %s:not 169.254", if_name);
 		return 0;
 	}
 
@@ -189,16 +189,16 @@ static int tunerfind2(struct ifreq * ifr, u32 ip_addr, u32 netmask, void * ctx)
 
 	char addrstr[256]; ip_printf(addrstr, ip_addr);
 
-	if (list->debug) fprintf(stderr, " %s:%s", ifr->ifr_name, addrstr);
+	if (list->debug) fprintf(stderr, " %s:%s", if_name, addrstr);
 
 	{
 		u8 hwaddr[6];
-		if (get_hw_addr(list->sock_to_kernel, ifr->ifr_name, hwaddr)) return 1;
+		if (get_hw_addr(list->sock_to_kernel, if_name, hwaddr)) return 1;
 		if (hwaddr[0] != 0 || hwaddr[1] != 0x21 || hwaddr[2] != 0x33) {
-			fprintf(stderr, "Warn: %s mac address %02x:%02x:%02x:%02x:%02x:%02x\n", ifr->ifr_name,
+			fprintf(stderr, "Warn: %s mac address %02x:%02x:%02x:%02x:%02x:%02x\n", if_name,
 				hwaddr[0], hwaddr[1], hwaddr[2], hwaddr[3], hwaddr[4], hwaddr[5]);
 			fprintf(stderr, "Warn: tuners will only send video if you \""
-				"sudo ifconfig %s hw ether 00:21:33:%02x:%02x:%02x\"\n", ifr->ifr_name,
+				"sudo ifconfig %s hw ether 00:21:33:%02x:%02x:%02x\"\n", if_name,
 				hwaddr[3], hwaddr[4], hwaddr[5]);
 		}
 	}

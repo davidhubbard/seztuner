@@ -16,7 +16,7 @@ typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned u32;
 
-typedef int (* foreach_if_cb)(struct ifreq * ifr, u32 ip_addr, u32 netmask, void * ctx);
+typedef int (* foreach_if_cb)(const char * if_name, u32 ip_addr, u32 netmask, void * ctx);
 int foreach_if(int sock_to_kernel, foreach_if_cb cb, void * ctx);
 #define ip_printf(s, ip) __ip_printf(s, sizeof(s), ip, __PRETTY_FUNCTION__, __LINE__)
 void __ip_printf(char * s, size_t len, u32 ip, const char * funcname, unsigned long line);
