@@ -12,11 +12,14 @@ You should have received a copy of the GNU Affero General Public License version
 this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#define _LARGEFILE64_SOURCE
 #include <stdio.h>
 #include <errno.h>
 #include <iconv.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include "mpgts.h"
 
 using namespace tuner_ns;
@@ -50,6 +53,14 @@ int mpgatsc::init()
 		vctstr = 0;
 	}
 
+	// only reset dumpfile if bytes have been written
+	// otherwise, calling open_dump() right before start_ts() would result in dumpfile getting closed
+	if (dumpfile && lseek64(fileno((FILE *) dumpfile), 0, SEEK_CUR) != 0) {
+		dumpfilename[0] = 0;
+		fclose((FILE *) dumpfile);
+		dumpfile = 0;
+	}
+
 	return 0;
 }
 
@@ -76,6 +87,10 @@ mpgatsc::~mpgatsc()
 		iconv_close(iconv_hnd);
 		iconv_hnd = 0;
 	}
+	if (dumpfile) {
+		fclose((FILE *) dumpfile);
+		dumpfile = 0;
+	}
 }
 
 
@@ -85,52 +100,23 @@ void dump_pkt(u8 * pkt, u32 len)
 	fprintf(stderr, "\n");
 }
 
-#if 1
-static u32 mpeg2_crc(u8 * buf, size_t buflen)
-{
-	static u32 crc_table[256];
-	u32 crc, i;
-
-	// ISO 13818-1 Annex B
-
-	if (0 == crc_table[255]) {
-		static const u32 poly =
-			((1 << 26) | (1 << 23) | (1 << 22) | (1 << 16) | (1 << 12) | (1 << 11) | (1 << 10) | (1 << 8) | (1 << 7) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | 1);
-		u32 c, j;
-		for (i = 0; i < 256; ++i) {
-			c = i << 24;
-			for (j = 0; j < 8; ++j) {
-				if (c & (1 << 31)) c = (c << 1) ^ poly;
-					else c <<= 1;
-			}
-			crc_table[i] = c;
-		}
-	}
-
-	crc = (u32) -1;
-	for (i = 0; i < buflen; ++i)
-		crc = crc_table[(buf[i] ^ (crc >> 24)) & 0xFF] ^ (crc << 8);
-	return crc;
-}
-#else
 static u32 mpeg2_crc(u8 * pkt, size_t len)
 {
 	u32 crc = (u32) -1;
 	for (size_t i = 0; i < len; i++, pkt++) {
-		u8 x = ((u8) crc) ^ *pkt;
-		crc >>= 8;
-		if (x & 0x01) crc ^= 0x77073096;	// TODO: these constants are for a different CRC polynomial
-		if (x & 0x02) crc ^= 0xee0e612c;
-		if (x & 0x04) crc ^= 0x076dc419;
-		if (x & 0x08) crc ^= 0x0edb8832;
-		if (x & 0x10) crc ^= 0x1db71064;
-		if (x & 0x20) crc ^= 0x3b6e20c8;
-		if (x & 0x40) crc ^= 0x76dc4190;
-		if (x & 0x80) crc ^= 0xedb88320;
+		u8 x = ((u8) (crc >> 24)) ^ *pkt;
+		crc <<= 8;
+		if (x & 0x01) crc ^= 0x04c11db7;	// poly << 0
+		if (x & 0x02) crc ^= 0x09823b6e;	// poly << 1
+		if (x & 0x04) crc ^= 0x130476dc;	// poly << 2
+		if (x & 0x08) crc ^= 0x2608edb8;	// poly << 3
+		if (x & 0x10) crc ^= 0x4c11db70;	// poly << 4
+		if (x & 0x20) crc ^= 0x9823b6e0;	// poly << 5, bit 31 is set now
+		if (x & 0x40) crc ^= 0x34867077;	// poly << 6 ^ poly
+		if (x & 0x80) crc ^= 0x690ce0ee;	// poly << 7 ^ poly << 1
 	}
-	return ~crc;
+	return crc;
 }
-#endif
 
 static int mpg_parse_hdr(u8 * pkt, u32 len, u32 * pos_ptr, u32 * id, u32 * ver, const char * tblname, u8 tblid)
 {
@@ -558,6 +544,13 @@ int mpgatsc::thread_demux(u8 pkt[188])
 		//fprintf(stderr, "thread_demux: FEC fail\n");
 		return 0;
 	}
+	if (dumpfile) {
+		if (fwrite(pkt, 1, 188, (FILE *) dumpfile) != 188) {
+			fprintf(stderr, "thread_demux: write(%s) failed: %d %s\n", dumpfilename, errno, strerror(errno));
+			fclose((FILE *) dumpfile);
+			dumpfile = 0;
+		}
+	}
 
 	u32 pid = (((u32) pkt[1] << 8) + pkt[2]) & 0x1fff;
 	u32 pos = 4;
@@ -636,5 +629,18 @@ int mpgatsc::thread_demux(u8 pkt[188])
 			pktlen[pid] = 0;
 		}
 	}
+	return 0;
+}
+
+int mpgatsc::open_dump(const char * filename)
+{
+	strncpy(dumpfilename, filename, sizeof(dumpfilename) - 1);
+	dumpfilename[sizeof(dumpfilename) - 1] = 0;
+	dumpfile = fopen(dumpfilename, "wb");
+	if (!dumpfile) {
+		fprintf(stderr, "mpgatsc::open_dump(%s) ch%02u failed: %d %s\n", filename, tvch, errno, strerror(errno));
+		return 1;
+	}
+	fprintf(stderr, "dumpfile=%p this=%p\n", dumpfile, this);
 	return 0;
 }

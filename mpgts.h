@@ -58,7 +58,8 @@ public:
 	int get_mse(u8 ch, u8 * status, u32 * ptmse, u32 * eqmse) { return tun.get_mse(ch, status, ptmse, eqmse); }
 	int start_ts(u8 ch);
 	int stop_ts(u8 ch) { return tun.stop_ts(ch); }
-	const char * get_vct(u8 ch) { return atsc[ch].get_vct(); }
+	const char * get_vct(u8 ch) { if (ch >= tuner::NUM_CHANNELS) return 0; return atsc[ch].get_vct(); }
+	int open_dump(u8 ch, const char * filename) { if (ch >= tuner::NUM_CHANNELS) return 1; return atsc[ch].open_dump(filename); }
 
 #if 0
 	// TODO: these are private, exposed only for debugging. Delete this.

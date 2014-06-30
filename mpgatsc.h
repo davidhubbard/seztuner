@@ -25,6 +25,8 @@ protected:
 	unsigned * pat;
 	void * iconv_hnd;
 	char * vctstr;
+	char dumpfilename[256];
+	void * dumpfile;
 
 	int parse_mgt(u8 * pkt, u32 pos, u32 len);
 	int parse_vct(u8 * pkt, u32 pos, u32 len, const char * tblname);
@@ -50,6 +52,8 @@ public:
 		pat = 0;
 		iconv_hnd = 0;
 		vctstr = 0;
+		dumpfilename[0] = 0;
+		dumpfile = 0;
 		tvch = 0;
 	}
 
@@ -60,6 +64,8 @@ public:
 	int thread_demux(u8 pkt[188]);
 
 	const char * get_vct() const { return vctstr; }
+
+	int open_dump(const char * filename);
 
 	unsigned tvch;
 };

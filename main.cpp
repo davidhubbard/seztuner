@@ -109,7 +109,7 @@ static int get_ch_id(mpgts * itm, unsigned n_ch, unsigned * chlist)
 				j = 10000000;	// stop after this loop
 			} else {
 				if (j) {
-					printf("%u (any key to abort)", 100 - j);
+					printf("%u (any key to stop)", 100 - j);
 					fflush(stdout);
 					int r = rawgetch();
 					if (r == -1) {
@@ -364,11 +364,64 @@ static int do_item(unsigned idx, mpgts * itm, tuner::tuner_antennas selected_ant
 	return (int) i;
 }
 
+static int do_record(mpgts * itm, unsigned tvch, tuner::tuner_antennas selected_antenna)
+{
+	char dstr[256]; ip_printf(dstr, itm->get_ip());
+	char tsfile[16]; snprintf(tsfile, sizeof(tsfile), "%02u.ts", tvch);
+
+	if (itm->open()) {
+		fprintf(stderr, "%s failed\n", dstr);
+		return 1;
+	}
+
+	unsigned n_ch = 0, * chlist = 0;
+	if (selected_antenna != tuner::nc) {
+		if (itm->set_antenna(selected_antenna)) {
+			fprintf(stderr, "%s failed to select antenna\n", dstr);
+			return 1;
+		}
+	}
+
+	if (itm->scan(&n_ch, &chlist)) {
+		fprintf(stderr, "%s failed to test antenna\n", dstr);
+		return 1;
+	}
+	if (selected_antenna == tuner::nc)
+		printf("%s auto-detected -a%u\n", dstr, (unsigned) itm->get_antenna());
+
+	unsigned i;
+	for (i = 0; i < n_ch; i++) if (chlist[i] == tvch) break;
+	if (i >= n_ch) fprintf(stderr, "%s warn: %u not detected in channel scan\n", dstr, tvch);
+
+	u8 ch = 0;
+	if (itm->open_dump(ch, tsfile)) return 1;
+	if (itm->start_ts(ch)) return 1;
+	if (itm->set_freq(ch, tvch)) return 1;
+
+	printf("freq lock phase_mse eq_mse | (press any key to stop)\n");
+	for (;;) {
+		u8 status;
+		u32 ptmse, eqmse;
+		if (itm->get_mse(ch, &status, &ptmse, &eqmse)) return 1;
+		printf(tune_nl "\e[K %2u   %2x  %4x      %4x   |", tvch, status, ptmse >> 4, eqmse >> 4);
+		fflush(stdout);
+
+		eqmse = (u32) rawgetch();
+		if (eqmse == (u32) -1) return 1;
+		if (eqmse) break;
+		usleep(100000);
+	}
+	printf("\n");
+	return 0;
+}
+
 int main(int argc, char ** argv)
 {
 	tuner::tuner_antennas selected_antenna = tuner::nc;
+	unsigned record_ch = 0;
 	unsigned i;
 	for (i = 1; (int) i < argc; i++) {
+		unsigned v;
 		if (!strncmp(argv[i], "-a", 2) && strlen(argv[i]) == 3 &&
 			argv[i][2] >= '1' && argv[i][2] <= '3')
 		{
@@ -377,6 +430,10 @@ int main(int argc, char ** argv)
 			case '2': selected_antenna = tuner::ant2; break;
 			case '3': selected_antenna = tuner::coax; break;
 			}
+		} else if (!strncmp(argv[i], "-c", 2) && sscanf(&argv[i][2], "%u", &v) == 1 &&
+			v >= tuner::TVCH_MIN && v <= tuner::TVCH_MAX)
+		{
+			record_ch = v;
 		} else {
 			fprintf(stderr, 
 				"Usage: %s [ -a1 | -a2 | -a3 ]   +---------------------------------+\n"
@@ -397,12 +454,24 @@ int main(int argc, char ** argv)
 		fprintf(stderr, "Error: no tuners found\n");
 		return 1;
 	}
-	printf("%s found %u IP%s, probing in order found:\n", argv[0], list_use, list_use == 1 ? "" : "s");
 
-	for (i = 0; i < list_use; i++) {
-		if (do_item(i, &list[i], selected_antenna)) {
+	if (record_ch) {
+		if (i != 1) {
+			printf("%s found %u IPs, using only first to record %02u.ts:\n", argv[0], list_use, record_ch);
+		} else {
+			printf("%s found 1 IP, recording %02u.ts:\n", argv[0], record_ch);
+		}
+		if (do_record(&list[0], record_ch, selected_antenna)) {
 			free(list);
 			return 1;
+		}
+	} else {
+		printf("%s found %u IP%s, probing in order found:\n", argv[0], list_use, list_use == 1 ? "" : "s");
+		for (i = 0; i < list_use; i++) {
+			if (do_item(i, &list[i], selected_antenna)) {
+				free(list);
+				return 1;
+			}
 		}
 	}
 
